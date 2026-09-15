@@ -88,10 +88,32 @@ export async function handleStopAgent({
       );
     }
 
+    // Intelligence already validates a cloned body before resolving thread access.
+    if (!isIntelligenceRuntime(runtime)) {
+      try {
+        const text = await request.text();
+        const body: unknown = text.trim() ? JSON.parse(text) : {};
+        if (body === null || typeof body !== "object" || Array.isArray(body)) {
+          throw new Error("Expected an object");
+        }
+        if (Object.keys(body).some((key) => key !== "runId")) {
+          throw new Error("Unexpected stop request field");
+        }
+        if ("runId" in body && body.runId !== undefined) {
+          if (typeof body.runId !== "string" || body.runId.length === 0) {
+            throw new Error("Expected a non-empty runId");
+          }
+          runId = body.runId;
+        }
+      } catch {
+        return Response.json({ error: "Invalid stop request" }, { status: 400 });
+      }
+    }
     const stopped = await runtime.runner.stop({
       threadId: stopThreadId,
       ...(runId === undefined ? {} : { runId }),
     });
+
 
     if (!stopped) {
       return new Response(
