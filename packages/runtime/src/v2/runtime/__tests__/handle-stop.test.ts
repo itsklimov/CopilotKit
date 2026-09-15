@@ -168,7 +168,7 @@ test("Intelligence stop still accepts an omitted request body", async () => {
   expect(stop).toHaveBeenCalledExactlyOnceWith({ threadId: "thread-1" });
 });
 
-test("Existing SSE stop keeps its unparsed body and thread-only runner call", async () => {
+test("SSE stop rejects malformed run scope without cancelling the thread", async () => {
   const runtime = new CopilotSseRuntime({
     agents: { default: new HttpAgent({ url: "http://localhost:9999/agent" }) },
   });
@@ -185,7 +185,7 @@ test("Existing SSE stop keeps its unparsed body and thread-only runner call", as
     threadId: "thread-1",
   });
 
-  expect(response.status).toBe(200);
-  expect(stop).toHaveBeenCalledExactlyOnceWith({ threadId: "thread-1" });
-  expect(request.bodyUsed).toBe(false);
+  expect(response.status).toBe(400);
+  expect(stop).not.toHaveBeenCalled();
+  expect(request.bodyUsed).toBe(true);
 });
