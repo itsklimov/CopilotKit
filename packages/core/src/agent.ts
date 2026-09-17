@@ -121,6 +121,13 @@ export class ProxiedCopilotRuntimeAgent extends HttpAgent {
   private _capabilities?: AgentCapabilities;
   private delegate?: AbstractAgent;
   private runtimeInfoPromise?: Promise<void>;
+  /**
+   * The runId of the last HTTP `run` this agent started, sent with `/stop` so
+   * the runtime cancels only that run. Cleared on `connect`: a reconnected
+   * thread may be running under a runId this client never saw, and a
+   * thread-wide stop is the only way to reach it.
+   */
+  private activeRunId?: string;
 
   constructor(config: ProxiedCopilotRuntimeAgentConfig) {
     const normalizedRuntimeUrl = config.runtimeUrl
@@ -244,6 +251,9 @@ export class ProxiedCopilotRuntimeAgent extends HttpAgent {
             agentId: routedId,
             threadId: this.threadId,
           },
+          ...(this.activeRunId === undefined
+            ? {}
+            : { body: { runId: this.activeRunId } }),
         }),
         ...(this.credentials ? { credentials: this.credentials } : {}),
       }).catch((error) => {
@@ -270,6 +280,9 @@ export class ProxiedCopilotRuntimeAgent extends HttpAgent {
         "Content-Type": "application/json",
         ...this.headers,
       },
+      ...(this.activeRunId === undefined
+        ? {}
+        : { body: JSON.stringify({ runId: this.activeRunId }) }),
       ...(this.credentials ? { credentials: this.credentials } : {}),
     }).catch((error) => {
       console.error("ProxiedCopilotRuntimeAgent: stop request failed", error);
@@ -401,6 +414,7 @@ export class ProxiedCopilotRuntimeAgent extends HttpAgent {
   }
 
   #connectViaHttp(input: RunAgentInput): Observable<BaseEvent> {
+    this.activeRunId = undefined;
     const routedId = this.routedAgentId();
     if (this.transport === "single") {
       if (!this.singleEndpointUrl) {
@@ -435,6 +449,7 @@ export class ProxiedCopilotRuntimeAgent extends HttpAgent {
   }
 
   #runViaHttp(input: RunAgentInput): Observable<BaseEvent> {
+    this.activeRunId = input.runId;
     if (this.transport === "single") {
       if (!this.singleEndpointUrl) {
         throw new Error("Single endpoint transport requires a runtimeUrl");
